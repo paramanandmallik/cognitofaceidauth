@@ -29,7 +29,6 @@ A complete client-side application demonstrating biometric authentication using 
    Edit `src/config.js` and update:
    - `userPoolId`: Your Cognito User Pool ID
    - `userPoolWebClientId`: Your App Client ID
-   - `userPoolWebClientSecret`: Your App Client Secret
    - `domain`: Your Cognito domain
    - `rpId`: Your domain (use 'localhost' for local testing)
 
@@ -145,21 +144,13 @@ localStorage.setItem('debug', 'true');
 
 ## Architecture
 
-```
-┌─────────────────┐    ┌──────────────────┐    ┌─────────────────┐
-│   Web Client    │    │   Cognito Pool   │    │ Lambda Triggers │
-│                 │    │                  │    │                 │
-│ ┌─────────────┐ │    │ ┌──────────────┐ │    │ ┌─────────────┐ │
-│ │  WebAuthn   │◄┼────┼►│ Custom Auth  │◄┼────┼►│ Auth Flow   │ │
-│ │  Service    │ │    │ │   Flow       │ │    │ │ Handlers    │ │
-│ └─────────────┘ │    │ └──────────────┘ │    │ └─────────────┘ │
-│                 │    │                  │    │                 │
-│ ┌─────────────┐ │    │ ┌──────────────┐ │    │ ┌─────────────┐ │
-│ │ Face ID/    │ │    │ │   User       │ │    │ │ Credential  │ │
-│ │ Touch ID    │ │    │ │ Management   │ │    │ │ Validation  │ │
-│ └─────────────┘ │    │ └──────────────┘ │    │ └─────────────┘ │
-└─────────────────┘    └──────────────────┘    └─────────────────┘
-```
+See [Architecture Diagram](./architecture-diagram.md) for the complete system design.
+
+The solution uses:
+- **Cognito User Pool**: Manages users and authentication flow
+- **Lambda Triggers**: Handle WebAuthn challenge creation and verification
+- **WebAuthn API**: Triggers Face ID/Touch ID prompts in the browser
+- **Client Storage**: Stores credential metadata (use DynamoDB in production)
 
 ## API Reference
 
