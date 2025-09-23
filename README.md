@@ -144,7 +144,7 @@ localStorage.setItem('debug', 'true');
 
 ## Architecture
 
-![Architecture Diagram](./generated-diagrams/faceid-cognito-architecture-clean.png)
+![Architecture Diagram](./generated-diagrams/faceid-cognito-architecture.png)
 
 ### Authentication Flow
 
