@@ -1,0 +1,8 @@
+{
+  "request": {
+    "privateChallengeParameters": {
+      "challenge": "test"
+    },
+    "challengeAnswer": "test"
+  }
+}

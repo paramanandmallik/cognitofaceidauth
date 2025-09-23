@@ -1,9 +1,15 @@
+// Services will be available globally after bundling
+
+// Initialize services
 const authService = new CognitoAuthService();
 const webAuthnService = new WebAuthnService();
 
+// Global variables
 let currentTab = 'register';
 
+// Initialize the application
 document.addEventListener('DOMContentLoaded', async () => {
+  // Wait for libraries to load
   await new Promise(resolve => {
     const checkLibraries = () => {
       if (typeof AWS !== 'undefined' && typeof AmazonCognitoIdentity !== 'undefined') {
@@ -20,6 +26,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   setupEventListeners();
 });
 
+// Check device support for WebAuthn and biometrics
 async function checkDeviceSupport() {
   const supportElement = document.getElementById('deviceSupport');
   const authElement = document.getElementById('availableAuth');
@@ -51,6 +58,7 @@ async function checkDeviceSupport() {
   }
 }
 
+// Check if user is already signed in
 async function checkCurrentUser() {
   try {
     const user = await authService.getCurrentUser();
@@ -62,13 +70,17 @@ async function checkCurrentUser() {
   }
 }
 
+// Setup event listeners
 function setupEventListeners() {
+  // Tab switching
   window.switchTab = (tabName) => {
+    // Update tab buttons
     document.querySelectorAll('.tab').forEach(tab => {
       tab.classList.remove('active');
     });
     document.querySelector(`[onclick="switchTab('${tabName}')"]`).classList.add('active');
 
+    // Update tab content
     document.querySelectorAll('.tab-content').forEach(content => {
       content.classList.remove('active');
     });
@@ -77,6 +89,7 @@ function setupEventListeners() {
     currentTab = tabName;
   };
 
+  // Enter key handlers
   document.getElementById('registerEmail').addEventListener('keypress', (e) => {
     if (e.key === 'Enter') registerUser();
   });
@@ -90,6 +103,7 @@ function setupEventListeners() {
   });
 }
 
+// Register new user with biometrics
 window.registerUser = async () => {
   const email = document.getElementById('registerEmail').value.trim();
   const username = document.getElementById('registerUsername').value.trim();
@@ -116,8 +130,10 @@ window.registerUser = async () => {
     
     if (result.success) {
       showStatus(result.message, 'success');
+      // Clear form
       document.getElementById('registerEmail').value = '';
       document.getElementById('registerUsername').value = '';
+      // Switch to login tab and pre-fill with email
       switchTab('login');
       document.getElementById('loginUsername').value = result.loginUsername || email;
       showStatus(`Registration complete! Use "${result.loginUsername || email}" to sign in with biometrics.`, 'success');
@@ -131,6 +147,7 @@ window.registerUser = async () => {
   }
 };
 
+// Sign in with biometrics
 window.signInWithBiometrics = async () => {
   const username = document.getElementById('loginUsername').value.trim();
 
@@ -160,6 +177,7 @@ window.signInWithBiometrics = async () => {
     console.error('Biometric sign-in error:', error);
     let errorMessage = error.message;
     
+    // Provide helpful error messages
     if (errorMessage.includes('No WebAuthn credentials found')) {
       errorMessage = 'No biometric credentials found. Please register first or check your email address.';
     } else if (errorMessage.includes('User not found')) {
@@ -172,6 +190,7 @@ window.signInWithBiometrics = async () => {
   }
 };
 
+// Sign in with password (fallback)
 window.signInWithPassword = async () => {
   const username = document.getElementById('loginUsername').value.trim();
   
@@ -201,6 +220,7 @@ window.signInWithPassword = async () => {
   }
 };
 
+// Sign out
 window.signOut = async () => {
   try {
     const result = await authService.signOut();
@@ -212,12 +232,14 @@ window.signOut = async () => {
   }
 };
 
+// Show status message
 function showStatus(message, type = 'info') {
   const statusElement = document.getElementById('status');
   statusElement.textContent = message;
   statusElement.className = `status ${type}`;
   statusElement.style.display = 'block';
 
+  // Auto-hide after 5 seconds for success/info messages
   if (type === 'success' || type === 'info') {
     setTimeout(() => {
       statusElement.style.display = 'none';
@@ -225,23 +247,28 @@ function showStatus(message, type = 'info') {
   }
 }
 
+// Show user info
 function showUserInfo(user) {
   document.getElementById('currentUser').textContent = user.username || user.signInDetails?.loginId || 'Unknown';
   document.getElementById('userInfo').classList.remove('hidden');
   
+  // Hide login/register forms
   document.querySelectorAll('.tab-content').forEach(content => {
     content.style.display = 'none';
   });
   document.querySelector('.tabs').style.display = 'none';
 }
 
+// Hide user info
 function hideUserInfo() {
   document.getElementById('userInfo').classList.add('hidden');
   
+  // Show login/register forms
   document.querySelectorAll('.tab-content').forEach(content => {
     content.style.display = 'block';
   });
   document.querySelector('.tabs').style.display = 'flex';
   
+  // Reset to current tab
   switchTab(currentTab);
 }

@@ -7,6 +7,7 @@ import { fileURLToPath } from 'url';
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
+// Generate self-signed certificate for HTTPS (required for WebAuthn)
 function generateCertificate() {
   const certPath = path.join(__dirname, 'cert.pem');
   const keyPath = path.join(__dirname, 'key.pem');
@@ -28,6 +29,7 @@ function generateCertificate() {
   };
 }
 
+// Simple static file server
 function serveStaticFile(req, res, filePath) {
   const extname = path.extname(filePath);
   let contentType = 'text/html';
@@ -66,8 +68,10 @@ function serveStaticFile(req, res, filePath) {
   });
 }
 
+// Create HTTPS server
 const credentials = generateCertificate();
 const server = https.createServer(credentials, (req, res) => {
+  // Add CORS headers
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
@@ -98,6 +102,7 @@ server.listen(PORT, () => {
   console.log('🔐 WebAuthn requires HTTPS - certificate auto-generated');
 });
 
+// Handle graceful shutdown
 process.on('SIGINT', () => {
   console.log('\n👋 Shutting down server...');
   server.close(() => {

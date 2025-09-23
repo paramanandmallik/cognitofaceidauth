@@ -5,6 +5,7 @@ import { fileURLToPath } from 'url';
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
+// Simple build script to bundle files for local testing
 function createDistDirectory() {
   const distDir = path.join(__dirname, 'dist');
   if (!fs.existsSync(distDir)) {
@@ -24,6 +25,7 @@ function bundleJavaScript() {
     if (fs.existsSync(filePath)) {
       let content = fs.readFileSync(filePath, 'utf8');
       
+      // Simple ES6 module transformation for browser compatibility
       content = content.replace(/import\s+.*?from\s+['"].*?['"];?\s*/g, '');
       content = content.replace(/export\s+/g, '');
       
@@ -49,11 +51,13 @@ function main() {
   
   const distDir = createDistDirectory();
   
+  // Bundle JavaScript
   const bundledJS = bundleJavaScript();
   const jsPath = path.join(distDir, 'bundle.js');
   fs.writeFileSync(jsPath, bundledJS);
   console.log('✅ JavaScript bundled to dist/bundle.js');
   
+  // Copy HTML
   copyHTML();
   
   console.log('🎉 Build complete!');
