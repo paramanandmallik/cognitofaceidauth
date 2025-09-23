@@ -1,0 +1,13 @@
+digraph "Face ID Authentication with Amazon Cognito" {
+	graph [fontcolor="#2D3436" fontname="Sans-Serif" fontsize=15 label="Face ID Authentication with Amazon Cognito" nodesep=0.60 pad=2.0 rankdir=LR ranksep=0.75 splines=ortho]
+	node [fixedsize=true fontcolor="#2D3436" fontname="Sans-Serif" fontsize=13 height=1.4 imagescale=true labelloc=b shape=box style=rounded width=1.4]
+	edge [color="#7B8894"]
+	subgraph cluster_Client {
+		graph [bgcolor="#E5F5FD" fontname="Sans-Serif" fontsize=12 label=Client labeljust=l pencolor="#AEB6BE" rankdir=LR shape=box style=rounded]
+		"05a239f4316245ff81ad00a7cbdf5470" [label=User height=1.9 image="/Users/paramanandmallik/.cache/uv/archive-v0/98PFSV-xhrDsd8eGnTqFf/lib/python3.13/site-packages/resources/aws/general/general.png" shape=none]
+		fd063164dd5d4ba4b9dfea0075e7f1e6 [label="Safari Browser" height=1.9 image="/Users/paramanandmallik/.cache/uv/archive-v0/98PFSV-xhrDsd8eGnTqFf/lib/python3.13/site-packages/resources/aws/compute/compute.png" shape=none]
+	}
+	subgraph "cluster_AWS Services" {
+		graph [bgcolor="#E5F5FD" fontname="Sans-Serif" fontsize=12 label="AWS Services" labeljust=l pencolor="#AEB6BE" rankdir=LR shape=box style=rounded]
+	}
+}

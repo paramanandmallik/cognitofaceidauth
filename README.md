@@ -144,13 +144,23 @@ localStorage.setItem('debug', 'true');
 
 ## Architecture
 
-See [Architecture Diagram](./architecture-diagram.md) for the complete system design.
+![Architecture Diagram](./generated-diagrams/faceid-cognito-architecture.png)
 
-The solution uses:
-- **Cognito User Pool**: Manages users and authentication flow
-- **Lambda Triggers**: Handle WebAuthn challenge creation and verification
-- **WebAuthn API**: Triggers Face ID/Touch ID prompts in the browser
-- **Client Storage**: Stores credential metadata (use DynamoDB in production)
+### Authentication Flow
+
+1. **User Authentication**: User initiates biometric authentication in web browser
+2. **WebAuthn Challenge**: WebAuthn API triggers Face ID/Touch ID prompt on device
+3. **Custom Auth Flow**: Cognito User Pool processes authentication via Lambda triggers
+4. **Credential Verification**: Lambda functions validate biometric response and store credentials
+5. **Token Issuance**: Successful verification returns JWT tokens for authenticated session
+
+### Key Components
+
+- **Cognito User Pool**: Manages users and orchestrates authentication flow
+- **Lambda Triggers**: Handle WebAuthn challenge creation and verification logic
+- **WebAuthn API**: Provides browser interface for Face ID/Touch ID prompts
+- **DynamoDB**: Stores credential metadata securely (production recommendation)
+- **CloudWatch**: Monitors authentication events and logs for compliance
 
 ## API Reference
 
