@@ -144,7 +144,7 @@ localStorage.setItem('debug', 'true');
 
 ## Architecture
 
-![Architecture Diagram](./generated-diagrams/faceid-cognito-architecture.png)
+![Architecture Diagram](./generated-diagrams/faceid-cognito-architecture-clean.png)
 
 ### Authentication Flow
 
@@ -159,7 +159,7 @@ localStorage.setItem('debug', 'true');
 - **Cognito User Pool**: Manages users and orchestrates authentication flow
 - **Lambda Triggers**: Handle WebAuthn challenge creation and verification logic
 - **WebAuthn API**: Provides browser interface for Face ID/Touch ID prompts
-- **DynamoDB**: Stores credential metadata securely (production recommendation)
+- **Client Storage**: Credential metadata stored locally in browser (use DynamoDB in production)
 - **CloudWatch**: Monitors authentication events and logs for compliance
 
 ## API Reference
