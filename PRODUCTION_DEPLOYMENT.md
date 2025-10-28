@@ -1,19 +1,63 @@
-# Production Deployment Guide
+# Production Deployment Guide - API Gateway + Lambda + S3
 
-This guide covers deploying the Face ID/Touch ID Cognito authentication app to AWS with a public IP address accessible from any device.
+This guide covers deploying the Face ID/Touch ID Cognito authentication app using AWS API Gateway, Lambda, and S3 for a fully serverless architecture.
 
 ## Prerequisites
 
 - AWS CLI configured with appropriate permissions
-- Domain name (optional but recommended)
-- SSL certificate (for HTTPS - required for WebAuthn)
+- Node.js 16+ installed
+- Modern browser with WebAuthn support (Safari recommended for Mac)
 
-## Step 1: Deploy Lambda Functions
+## Step 1: Create IAM Role
 
-### 1.1 Create Lambda Functions
 ```bash
-# Create deployment package
-zip -r lambda-functions.zip lambda/
+aws iam create-role --role-name lambda-execution-role --assume-role-policy-document '{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Effect": "Allow",
+      "Principal": {"Service": "lambda.amazonaws.com"},
+      "Action": "sts:AssumeRole"
+    }
+  ]
+}'
+
+aws iam attach-role-policy --role-name lambda-execution-role --policy-arn arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
+aws iam attach-role-policy --role-name lambda-execution-role --policy-arn arn:aws:iam::aws:policy/AmazonS3ReadOnlyAccess
+```
+
+## Step 2: Create S3 Bucket
+
+```bash
+BUCKET_NAME="faceid-auth-$(date +%s)"
+aws s3 mb s3://$BUCKET_NAME
+aws s3api put-bucket-policy --bucket $BUCKET_NAME --policy '{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Effect": "Allow",
+      "Principal": {"AWS": "arn:aws:iam::YOUR_ACCOUNT:role/lambda-execution-role"},
+      "Action": "s3:GetObject",
+      "Resource": "arn:aws:s3:::'$BUCKET_NAME'/*"
+    }
+  ]
+}'
+```
+
+## Step 3: Create Lambda Functions
+
+```bash
+cd lambda
+
+# Install dependencies for API handler
+npm install
+
+# Package Lambda functions
+zip defineAuthChallenge.zip defineAuthChallenge.js
+zip createAuthChallenge.zip createAuthChallenge.js
+zip verifyAuthChallengeResponse.zip verifyAuthChallengeResponse.js
+zip preSignUp.zip preSignUp.js
+zip -r api-auth-handler.zip apiAuthHandler.js package.json node_modules/
 
 # Create Lambda functions
 aws lambda create-function \
@@ -21,55 +65,43 @@ aws lambda create-function \
   --runtime nodejs18.x \
   --role arn:aws:iam::YOUR_ACCOUNT:role/lambda-execution-role \
   --handler defineAuthChallenge.handler \
-  --zip-file fileb://lambda-functions.zip
+  --zip-file fileb://defineAuthChallenge.zip
 
 aws lambda create-function \
   --function-name cognito-create-auth-challenge \
   --runtime nodejs18.x \
   --role arn:aws:iam::YOUR_ACCOUNT:role/lambda-execution-role \
   --handler createAuthChallenge.handler \
-  --zip-file fileb://lambda-functions.zip
+  --zip-file fileb://createAuthChallenge.zip
 
 aws lambda create-function \
   --function-name cognito-verify-auth-challenge \
   --runtime nodejs18.x \
   --role arn:aws:iam::YOUR_ACCOUNT:role/lambda-execution-role \
   --handler verifyAuthChallengeResponse.handler \
-  --zip-file fileb://lambda-functions.zip
+  --zip-file fileb://verifyAuthChallengeResponse.zip
 
 aws lambda create-function \
   --function-name cognito-pre-signup \
   --runtime nodejs18.x \
   --role arn:aws:iam::YOUR_ACCOUNT:role/lambda-execution-role \
   --handler preSignUp.handler \
-  --zip-file fileb://lambda-functions.zip
+  --zip-file fileb://preSignUp.zip
+
+aws lambda create-function \
+  --function-name api-auth-handler \
+  --runtime nodejs18.x \
+  --role arn:aws:iam::YOUR_ACCOUNT:role/lambda-execution-role \
+  --handler apiAuthHandler.handler \
+  --zip-file fileb://api-auth-handler.zip
+
+cd ..
 ```
 
-### 1.2 Update Lambda Function Code
+## Step 4: Create Cognito User Pool
+
 ```bash
-# Update each function with individual files
-aws lambda update-function-code \
-  --function-name cognito-define-auth-challenge \
-  --zip-file fileb://lambda/defineAuthChallenge.zip
-
-aws lambda update-function-code \
-  --function-name cognito-create-auth-challenge \
-  --zip-file fileb://lambda/createAuthChallenge.zip
-
-aws lambda update-function-code \
-  --function-name cognito-verify-auth-challenge \
-  --zip-file fileb://lambda/verifyAuthChallengeResponse.zip
-
-aws lambda update-function-code \
-  --function-name cognito-pre-signup \
-  --zip-file fileb://lambda/preSignUp.zip
-```
-
-## Step 2: Configure Cognito User Pool
-
-### 2.1 Create User Pool
-```bash
-aws cognito-idp create-user-pool \
+USER_POOL_ID=$(aws cognito-idp create-user-pool \
   --pool-name "FaceIDAuthPool" \
   --policies '{
     "PasswordPolicy": {
@@ -81,145 +113,86 @@ aws cognito-idp create-user-pool \
     }
   }' \
   --lambda-config '{
-    "PreSignUp": "arn:aws:lambda:REGION:ACCOUNT:function:cognito-pre-signup",
-    "DefineAuthChallenge": "arn:aws:lambda:REGION:ACCOUNT:function:cognito-define-auth-challenge",
-    "CreateAuthChallenge": "arn:aws:lambda:REGION:ACCOUNT:function:cognito-create-auth-challenge",
-    "VerifyAuthChallengeResponse": "arn:aws:lambda:REGION:ACCOUNT:function:cognito-verify-auth-challenge"
+    "PreSignUp": "arn:aws:lambda:us-east-1:YOUR_ACCOUNT:function:cognito-pre-signup",
+    "DefineAuthChallenge": "arn:aws:lambda:us-east-1:YOUR_ACCOUNT:function:cognito-define-auth-challenge",
+    "CreateAuthChallenge": "arn:aws:lambda:us-east-1:YOUR_ACCOUNT:function:cognito-create-auth-challenge",
+    "VerifyAuthChallengeResponse": "arn:aws:lambda:us-east-1:YOUR_ACCOUNT:function:cognito-verify-auth-challenge"
   }' \
-  --explicit-auth-flows ALLOW_CUSTOM_AUTH ALLOW_USER_PASSWORD_AUTH ALLOW_REFRESH_TOKEN_AUTH
-```
+  --explicit-auth-flows ALLOW_CUSTOM_AUTH ALLOW_USER_PASSWORD_AUTH ALLOW_REFRESH_TOKEN_AUTH \
+  --query 'UserPool.Id' --output text)
 
-### 2.2 Create App Client
-```bash
-aws cognito-idp create-user-pool-client \
-  --user-pool-id YOUR_USER_POOL_ID \
+CLIENT_ID=$(aws cognito-idp create-user-pool-client \
+  --user-pool-id $USER_POOL_ID \
   --client-name "FaceIDAuthClient" \
   --explicit-auth-flows ALLOW_CUSTOM_AUTH ALLOW_USER_PASSWORD_AUTH ALLOW_REFRESH_TOKEN_AUTH \
-  --generate-secret
+  --generate-secret \
+  --query 'UserPoolClient.ClientId' --output text)
+
+echo "User Pool ID: $USER_POOL_ID"
+echo "Client ID: $CLIENT_ID"
 ```
 
-## Step 3: Deploy Frontend to EC2
+## Step 5: Create API Gateway
 
-### 3.1 Launch EC2 Instance
 ```bash
-# Launch Ubuntu instance
-aws ec2 run-instances \
-  --image-id ami-0c02fb55956c7d316 \
-  --instance-type t3.micro \
-  --key-name YOUR_KEY_PAIR \
-  --security-group-ids sg-YOUR_SECURITY_GROUP \
-  --subnet-id subnet-YOUR_SUBNET \
-  --associate-public-ip-address
+API_ID=$(aws apigateway create-rest-api --name faceid-auth-api --query 'id' --output text)
+ROOT_ID=$(aws apigateway get-resources --rest-api-id $API_ID --query 'items[0].id' --output text)
+
+# Create proxy resource
+PROXY_ID=$(aws apigateway create-resource \
+  --rest-api-id $API_ID \
+  --parent-id $ROOT_ID \
+  --path-part '{proxy+}' \
+  --query 'id' --output text)
+
+# Add Lambda integration to root
+aws apigateway put-method --rest-api-id $API_ID --resource-id $ROOT_ID --http-method ANY --authorization-type NONE
+aws apigateway put-integration \
+  --rest-api-id $API_ID \
+  --resource-id $ROOT_ID \
+  --http-method ANY \
+  --type AWS_PROXY \
+  --integration-http-method POST \
+  --uri arn:aws:apigateway:us-east-1:lambda:path/2015-03-31/functions/arn:aws:lambda:us-east-1:YOUR_ACCOUNT:function:api-auth-handler/invocations
+
+# Add Lambda integration to proxy
+aws apigateway put-method --rest-api-id $API_ID --resource-id $PROXY_ID --http-method ANY --authorization-type NONE
+aws apigateway put-integration \
+  --rest-api-id $API_ID \
+  --resource-id $PROXY_ID \
+  --http-method ANY \
+  --type AWS_PROXY \
+  --integration-http-method POST \
+  --uri arn:aws:apigateway:us-east-1:lambda:path/2015-03-31/functions/arn:aws:lambda:us-east-1:YOUR_ACCOUNT:function:api-auth-handler/invocations
+
+# Deploy API
+aws apigateway create-deployment --rest-api-id $API_ID --stage-name prod
+
+# Add Lambda permissions
+aws lambda add-permission \
+  --function-name api-auth-handler \
+  --statement-id api-gateway-invoke \
+  --action lambda:InvokeFunction \
+  --principal apigateway.amazonaws.com \
+  --source-arn "arn:aws:execute-api:us-east-1:YOUR_ACCOUNT:$API_ID/*/*"
+
+echo "API Gateway URL: https://$API_ID.execute-api.us-east-1.amazonaws.com/prod"
 ```
 
-### 3.2 Configure Security Group
-```bash
-# Allow HTTP, HTTPS, and SSH
-aws ec2 authorize-security-group-ingress \
-  --group-id sg-YOUR_SECURITY_GROUP \
-  --protocol tcp \
-  --port 80 \
-  --cidr 0.0.0.0/0
+## Step 6: Configure Application
 
-aws ec2 authorize-security-group-ingress \
-  --group-id sg-YOUR_SECURITY_GROUP \
-  --protocol tcp \
-  --port 443 \
-  --cidr 0.0.0.0/0
-
-aws ec2 authorize-security-group-ingress \
-  --group-id sg-YOUR_SECURITY_GROUP \
-  --protocol tcp \
-  --port 22 \
-  --cidr YOUR_IP/32
-```
-
-### 3.3 Setup Server on EC2
-```bash
-# SSH into instance
-ssh -i your-key.pem ubuntu@YOUR_PUBLIC_IP
-
-# Install Node.js and dependencies
-curl -fsSL https://deb.nodesource.com/setup_18.x | sudo -E bash -
-sudo apt-get install -y nodejs nginx certbot python3-certbot-nginx
-
-# Clone and setup application
-git clone YOUR_REPO_URL /var/www/faceid-auth
-cd /var/www/faceid-auth
-npm install
-```
-
-## Step 4: Configure Domain and SSL
-
-### 4.1 Setup Domain (Optional)
-```bash
-# Point your domain to EC2 public IP
-# Update DNS A record: your-domain.com -> YOUR_EC2_PUBLIC_IP
-```
-
-### 4.2 Configure SSL Certificate
-```bash
-# Using Let's Encrypt (if you have a domain)
-sudo certbot --nginx -d your-domain.com
-
-# Or use self-signed certificate for IP access
-sudo openssl req -x509 -nodes -days 365 -newkey rsa:2048 \
-  -keyout /etc/ssl/private/selfsigned.key \
-  -out /etc/ssl/certs/selfsigned.crt
-```
-
-## Step 5: Configure Nginx
-
-### 5.1 Create Nginx Configuration
-```bash
-sudo nano /etc/nginx/sites-available/faceid-auth
-```
-
-Add configuration:
-```nginx
-server {
-    listen 80;
-    listen 443 ssl;
-    server_name YOUR_DOMAIN_OR_IP;
-
-    ssl_certificate /etc/ssl/certs/selfsigned.crt;
-    ssl_certificate_key /etc/ssl/private/selfsigned.key;
-
-    location / {
-        proxy_pass http://localhost:3000;
-        proxy_http_version 1.1;
-        proxy_set_header Upgrade $http_upgrade;
-        proxy_set_header Connection 'upgrade';
-        proxy_set_header Host $host;
-        proxy_set_header X-Real-IP $remote_addr;
-        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-        proxy_set_header X-Forwarded-Proto $scheme;
-        proxy_cache_bypass $http_upgrade;
-    }
-}
-```
-
-### 5.2 Enable Site
-```bash
-sudo ln -s /etc/nginx/sites-available/faceid-auth /etc/nginx/sites-enabled/
-sudo nginx -t
-sudo systemctl restart nginx
-```
-
-## Step 6: Update Application Configuration
-
-### 6.1 Update config.js for Production
+Update `src/config.js` with your AWS resources:
 ```javascript
 const cognitoConfig = {
   region: 'us-east-1',
-  userPoolId: 'YOUR_PRODUCTION_USER_POOL_ID',
-  userPoolWebClientId: 'YOUR_PRODUCTION_CLIENT_ID',
-  userPoolWebClientSecret: 'YOUR_PRODUCTION_CLIENT_SECRET',
+  userPoolId: 'YOUR_USER_POOL_ID',
+  userPoolWebClientId: 'YOUR_CLIENT_ID',
+  userPoolWebClientSecret: 'YOUR_CLIENT_SECRET',
   domain: 'YOUR_COGNITO_DOMAIN',
   
   webAuthn: {
-    rpId: 'your-domain.com', // or IP address
-    rpName: 'Face ID Auth Production',
+    rpId: 'YOUR_API_GATEWAY_ID.execute-api.us-east-1.amazonaws.com',
+    rpName: 'Face ID Cognito Demo',
     timeout: 60000,
     userVerification: 'required',
     authenticatorAttachment: 'platform'
@@ -227,137 +200,80 @@ const cognitoConfig = {
 };
 ```
 
-### 6.2 Update Lambda Functions for Production
-Update `createAuthChallenge.js`:
+Update Lambda functions with your API Gateway domain:
 ```javascript
-event.response.publicChallengeParameters = {
-  challenge: challenge,
-  rpName: 'Face ID Auth Production',
-  rpId: 'your-domain.com', // Update this
-  userVerification: 'required',
-  authenticatorAttachment: 'platform'
-};
+// In lambda/createAuthChallenge.js
+rpId: 'YOUR_API_GATEWAY_ID.execute-api.us-east-1.amazonaws.com'
+
+// In lambda/verifyAuthChallengeResponse.js
+const validOrigins = [
+  'https://YOUR_API_GATEWAY_ID.execute-api.us-east-1.amazonaws.com'
+];
 ```
 
-## Step 7: Start Application
+## Step 7: Build and Deploy
 
-### 7.1 Create Systemd Service
 ```bash
-sudo nano /etc/systemd/system/faceid-auth.service
-```
+# Build static files
+node build-static.js
+cp dist/app.js dist/bundle.js
 
-Add service configuration:
-```ini
-[Unit]
-Description=Face ID Auth Application
-After=network.target
+# Upload to S3
+aws s3 cp dist/ s3://$BUCKET_NAME/ --recursive
 
-[Service]
-Type=simple
-User=ubuntu
-WorkingDirectory=/var/www/faceid-auth
-ExecStart=/usr/bin/node server.js
-Restart=on-failure
-Environment=NODE_ENV=production
-Environment=PORT=3000
-
-[Install]
-WantedBy=multi-user.target
-```
-
-### 7.2 Start Service
-```bash
-sudo systemctl daemon-reload
-sudo systemctl enable faceid-auth
-sudo systemctl start faceid-auth
-sudo systemctl status faceid-auth
+# Update Lambda functions with correct configuration
+cd lambda
+aws lambda update-function-code --function-name cognito-create-auth-challenge --zip-file fileb://createAuthChallenge.zip
+aws lambda update-function-code --function-name cognito-verify-auth-challenge --zip-file fileb://verifyAuthChallengeResponse.zip
+cd ..
 ```
 
 ## Step 8: Test Deployment
 
-### 8.1 Access Application
-- Open browser and navigate to `https://your-domain.com` or `https://YOUR_EC2_IP`
-- Test registration with biometrics
-- Test sign-in with Face ID/Touch ID
+1. Open your API Gateway URL: `https://YOUR_API_GATEWAY_ID.execute-api.us-east-1.amazonaws.com/prod`
+2. Test registration with biometrics
+3. Test sign-in with Face ID/Touch ID
 
-### 8.2 Mobile Device Testing
-- Ensure HTTPS is working (required for WebAuthn)
-- Test on iOS Safari and Android Chrome
-- Verify biometric prompts work correctly
+## Architecture Benefits
 
-## Step 9: Production Optimizations
+- **Fully Serverless**: No servers to manage
+- **Auto-scaling**: Handles traffic spikes automatically
+- **Cost-effective**: Pay only for what you use
+- **High Availability**: Built-in redundancy
+- **HTTPS by Default**: Secure communication
+- **Global Distribution**: Fast worldwide access
 
-### 9.1 Database Storage (Replace localStorage)
+## Monitoring and Logging
+
 ```bash
-# Create DynamoDB table for credentials
-aws dynamodb create-table \
-  --table-name WebAuthnCredentials \
-  --attribute-definitions \
-    AttributeName=userId,AttributeType=S \
-    AttributeName=credentialId,AttributeType=S \
-  --key-schema \
-    AttributeName=userId,KeyType=HASH \
-    AttributeName=credentialId,KeyType=RANGE \
-  --billing-mode PAY_PER_REQUEST
+# View Lambda logs
+aws logs describe-log-groups --log-group-name-prefix "/aws/lambda/"
+aws logs tail /aws/lambda/api-auth-handler --follow
+
+# View API Gateway logs (if enabled)
+aws logs tail API-Gateway-Execution-Logs_YOUR_API_ID/prod --follow
 ```
 
-### 9.2 CloudWatch Monitoring
-```bash
-# Enable detailed monitoring
-aws logs create-log-group --log-group-name /aws/lambda/cognito-auth-functions
-aws logs create-log-group --log-group-name /var/log/faceid-auth
-```
+## Production Optimizations
 
-### 9.3 Auto Scaling (Optional)
-```bash
-# Create Application Load Balancer
-aws elbv2 create-load-balancer \
-  --name faceid-auth-alb \
-  --subnets subnet-12345 subnet-67890 \
-  --security-groups sg-YOUR_SECURITY_GROUP
+1. **Custom Domain**: Use Route 53 + ACM for custom domain
+2. **WAF**: Enable AWS WAF for security
+3. **CloudWatch Alarms**: Set up monitoring alerts
+4. **DynamoDB**: Replace localStorage with DynamoDB
+5. **Lambda Layers**: Optimize Lambda function sizes
+6. **API Caching**: Enable API Gateway caching
 
-# Create Auto Scaling Group
-aws autoscaling create-auto-scaling-group \
-  --auto-scaling-group-name faceid-auth-asg \
-  --launch-template LaunchTemplateName=faceid-auth-template \
-  --min-size 1 \
-  --max-size 3 \
-  --desired-capacity 2 \
-  --target-group-arns arn:aws:elasticloadbalancing:region:account:targetgroup/faceid-auth-tg
-```
+## Security Considerations
 
-## Step 10: Security Hardening
-
-### 10.1 Update Security Groups
-- Restrict SSH access to specific IPs
-- Use WAF for additional protection
-- Enable VPC Flow Logs
-
-### 10.2 Enable CloudTrail
-```bash
-aws cloudtrail create-trail \
-  --name faceid-auth-trail \
-  --s3-bucket-name your-cloudtrail-bucket
-```
+- Lambda functions run with minimal IAM permissions
+- S3 bucket is not publicly accessible
+- WebAuthn provides phishing-resistant authentication
+- All communication over HTTPS
+- Credentials never leave the user's device
 
 ## Troubleshooting
 
-### Common Issues:
-1. **WebAuthn not working**: Ensure HTTPS is properly configured
-2. **CORS errors**: Update Cognito CORS settings
-3. **Lambda timeouts**: Increase timeout values
-4. **Certificate issues**: Verify SSL certificate is valid
-
-### Logs to Check:
-- CloudWatch Logs for Lambda functions
-- Nginx access/error logs: `/var/log/nginx/`
-- Application logs: `journalctl -u faceid-auth`
-
-## Cost Estimation
-
-- EC2 t3.micro: ~$8.50/month
-- Lambda executions: ~$0.20/month (1000 requests)
-- Cognito: Free tier covers 50,000 MAUs
-- Data transfer: ~$1-5/month depending on usage
-
-Total estimated cost: ~$10-15/month for small-scale deployment.
+1. **403 Errors**: Check Lambda permissions and S3 bucket policy
+2. **500 Errors**: Check Lambda function logs in CloudWatch
+3. **WebAuthn Failures**: Ensure HTTPS and correct rpId configuration
+4. **Cognito Errors**: Verify Lambda trigger configuration
