@@ -26,7 +26,7 @@ exports.handler = async (event) => {
         event.response.publicChallengeParameters = {
             challenge: challenge,
             rpName: 'Face ID Cognito Demo',
-            rpId: 'localhost',
+            rpId: 'plaf7n3tpk.execute-api.us-east-1.amazonaws.com',
             userVerification: 'required',
             authenticatorAttachment: 'platform'
         };

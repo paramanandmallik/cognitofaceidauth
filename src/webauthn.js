@@ -5,34 +5,58 @@ class WebAuthnService {
   }
 
   async isWebAuthnSupported() {
-    return window.PublicKeyCredential && 
-           await PublicKeyCredential.isUserVerifyingPlatformAuthenticatorAvailable();
+    try {
+      if (!window.PublicKeyCredential) {
+        return false;
+      }
+      
+      // Add timeout to prevent hanging
+      const timeoutPromise = new Promise((_, reject) => 
+        setTimeout(() => reject(new Error('Timeout')), 5000)
+      );
+      
+      const checkPromise = PublicKeyCredential.isUserVerifyingPlatformAuthenticatorAvailable();
+      
+      return await Promise.race([checkPromise, timeoutPromise]);
+    } catch (error) {
+      console.warn('WebAuthn support check failed:', error);
+      return false;
+    }
   }
 
   async getAvailableAuthenticators() {
     const authenticators = [];
     
-    if (window.PublicKeyCredential) {
-      try {
-        const available = await PublicKeyCredential.isUserVerifyingPlatformAuthenticatorAvailable();
-        if (available) {
-          // Detect Apple devices
-          const isApple = /iPad|iPhone|iPod|Mac/.test(navigator.userAgent);
-          if (isApple) {
-            // Check for Face ID capability (newer devices)
-            const hasFaceID = /iPhone1[2-9]|iPad/.test(navigator.userAgent);
-            if (hasFaceID) {
-              authenticators.push('Face ID');
-            } else {
-              authenticators.push('Touch ID');
-            }
-          } else {
-            authenticators.push('Platform Authenticator');
-          }
-        }
-      } catch (error) {
-        console.warn('Error detecting authenticators:', error);
+    try {
+      if (!window.PublicKeyCredential) {
+        return authenticators;
       }
+      
+      // Add timeout to prevent hanging
+      const timeoutPromise = new Promise((_, reject) => 
+        setTimeout(() => reject(new Error('Timeout')), 5000)
+      );
+      
+      const checkPromise = PublicKeyCredential.isUserVerifyingPlatformAuthenticatorAvailable();
+      const available = await Promise.race([checkPromise, timeoutPromise]);
+      
+      if (available) {
+        // Detect Apple devices
+        const isApple = /iPad|iPhone|iPod|Mac/.test(navigator.userAgent);
+        if (isApple) {
+          // Check for Face ID capability (newer devices)
+          const hasFaceID = /iPhone1[2-9]|iPad/.test(navigator.userAgent);
+          if (hasFaceID) {
+            authenticators.push('Face ID');
+          } else {
+            authenticators.push('Touch ID');
+          }
+        } else {
+          authenticators.push('Platform Authenticator');
+        }
+      }
+    } catch (error) {
+      console.warn('Error detecting authenticators:', error);
     }
     
     return authenticators;

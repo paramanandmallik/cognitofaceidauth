@@ -44,11 +44,17 @@ exports.handler = async (event) => {
             
             console.log('Client data:', clientData);
             
-            // Verify challenge matches
+            // Verify challenge matches and origin is valid
+            const validOrigins = [
+                'https://localhost:3000',
+                'https://127.0.0.1:3000',
+                'https://plaf7n3tpk.execute-api.us-east-1.amazonaws.com'
+            ];
+            
             if (clientData.challenge === expectedChallenge && 
                 clientData.type === 'webauthn.get' &&
                 clientData.origin && 
-                (clientData.origin.includes('localhost') || clientData.origin.includes('127.0.0.1'))) {
+                validOrigins.some(origin => clientData.origin.startsWith(origin))) {
                 
                 console.log('WebAuthn verification successful');
                 event.response.answerCorrect = true;
@@ -57,6 +63,7 @@ exports.handler = async (event) => {
                 console.log('Expected challenge:', expectedChallenge);
                 console.log('Received challenge:', clientData.challenge);
                 console.log('Origin:', clientData.origin);
+                console.log('Valid origins:', validOrigins);
                 event.response.answerCorrect = false;
             }
         } else {

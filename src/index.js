@@ -32,8 +32,18 @@ async function checkDeviceSupport() {
   const authElement = document.getElementById('availableAuth');
 
   try {
-    const isSupported = await webAuthnService.isWebAuthnSupported();
-    const authenticators = await webAuthnService.getAvailableAuthenticators();
+    // Add overall timeout for the entire check
+    const timeoutPromise = new Promise((_, reject) => 
+      setTimeout(() => reject(new Error('Device check timeout')), 10000)
+    );
+    
+    const checkPromise = (async () => {
+      const isSupported = await webAuthnService.isWebAuthnSupported();
+      const authenticators = await webAuthnService.getAvailableAuthenticators();
+      return { isSupported, authenticators };
+    })();
+    
+    const { isSupported, authenticators } = await Promise.race([checkPromise, timeoutPromise]);
 
     if (isSupported) {
       supportElement.textContent = '✅ WebAuthn Supported';
@@ -54,7 +64,9 @@ async function checkDeviceSupport() {
   } catch (error) {
     console.error('Error checking device support:', error);
     supportElement.textContent = 'Error checking support';
+    supportElement.style.color = '#dc3545';
     authElement.textContent = 'Error detecting authenticators';
+    authElement.style.color = '#dc3545';
   }
 }
 

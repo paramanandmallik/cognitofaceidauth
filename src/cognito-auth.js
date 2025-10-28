@@ -153,7 +153,7 @@ class CognitoAuthService {
           }],
           userVerification: 'required',
           timeout: 60000,
-          rpId: 'localhost'
+          rpId: cognitoConfig.webAuthn.rpId
         };
 
         console.log('WebAuthn get options:', publicKeyOptions);
