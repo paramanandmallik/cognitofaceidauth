@@ -65,28 +65,16 @@ class CognitoAuthService {
       
       console.log('Credentials stored in localStorage');
 
-      // Step 5: Auto-confirm the user (since we're using temporary password)
-      try {
-        const confirmParams = {
-          ClientId: cognitoConfig.userPoolWebClientId,
-          Username: email,
-          ConfirmationCode: '000000', // This won't work, but we'll handle it
-          SecretHash: this.calculateSecretHash(email)
-        };
-        
-        // Try to confirm, but don't fail if it doesn't work
-        await this.cognitoIdentityServiceProvider.confirmSignUp(confirmParams).promise();
-      } catch (confirmError) {
-        console.log('Auto-confirm failed (expected):', confirmError.message);
-        // This is expected - we'll need manual confirmation or admin confirmation
-      }
+      // Step 5: User is auto-confirmed via PreSignUp Lambda trigger
+      console.log('User auto-confirmed via PreSignUp trigger');
 
       return {
         success: true,
-        message: `Registration successful! Use "${email}" to sign in with biometrics.`,
+        message: `Registration successful! You can now sign in with biometrics using "${email}".`,
         userId,
         credentialId: credential.id,
-        loginUsername: email // Tell user to use email for login
+        loginUsername: email,
+        userConfirmed: true
       };
 
     } catch (error) {
