@@ -2,10 +2,6 @@
 
 A complete serverless application demonstrating biometric authentication using Face ID and Touch ID with Amazon Cognito User Pools, deployed on AWS API Gateway.
 
-## 🚀 Live Demo
-
-**Production URL**: https://plaf7n3tpk.execute-api.us-east-1.amazonaws.com/prod
-
 ## Features
 
 - **Biometric Authentication**: Face ID and Touch ID support on Mac/iOS
